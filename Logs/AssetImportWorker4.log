@@ -185,3 +185,79 @@ Unloading 6629 unused Assets / (7.0 MB). Loaded Objects now: 7288.
 Memory consumption went from 181.1 MB to 174.1 MB.
 Total: 11.723300 ms (FindLiveObjects: 0.532100 ms CreateObjectMapping: 0.361800 ms MarkObjects: 5.991400 ms  DeleteObjects: 4.836800 ms)
 
+========================================================================
+Received Prepare
+Refreshing native plugins compatible for Editor in 6.54 ms, found 4 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Unloading 40 Unused Serialized files (Serialized files now loaded: 0)
+Unloading 6616 unused Assets / (7.0 MB). Loaded Objects now: 7288.
+Memory consumption went from 151.2 MB to 144.3 MB.
+Total: 347.091600 ms (FindLiveObjects: 2.477900 ms CreateObjectMapping: 1.690500 ms MarkObjects: 333.459000 ms  DeleteObjects: 9.460300 ms)
+
+Prepare: number of updated asset objects reloaded= 0
+========================================================================
+Received Prepare
+Refreshing native plugins compatible for Editor in 5.78 ms, found 4 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Unloading 40 Unused Serialized files (Serialized files now loaded: 0)
+Unloading 6616 unused Assets / (7.4 MB). Loaded Objects now: 7288.
+Memory consumption went from 151.0 MB to 143.7 MB.
+Total: 20.508400 ms (FindLiveObjects: 1.340900 ms CreateObjectMapping: 1.091900 ms MarkObjects: 10.586900 ms  DeleteObjects: 7.486700 ms)
+
+Prepare: number of updated asset objects reloaded= 0
+========================================================================
+Received Prepare
+Refreshing native plugins compatible for Editor in 7.87 ms, found 4 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Unloading 40 Unused Serialized files (Serialized files now loaded: 0)
+Unloading 6616 unused Assets / (6.9 MB). Loaded Objects now: 7288.
+Memory consumption went from 151.0 MB to 144.1 MB.
+Total: 19.330900 ms (FindLiveObjects: 1.111900 ms CreateObjectMapping: 0.851800 ms MarkObjects: 10.163200 ms  DeleteObjects: 7.202600 ms)
+
+Prepare: number of updated asset objects reloaded= 0
+========================================================================
+Received Import Request.
+  Time since last request: 1159438.746736 seconds.
+  path: Assets/scripts/AnswerScript.cs
+  artifactKey: Guid(9d67d5c012825b24d8a33ae7add06859) Importer(815301076,1909f56bfc062723c751e8b465ee728b)
+Start importing Assets/scripts/AnswerScript.cs using Guid(9d67d5c012825b24d8a33ae7add06859) Importer(815301076,1909f56bfc062723c751e8b465ee728b) (PreviewImporter) -> (artifact id: 'ebe0a94f56c30531ca804926f8a45bb2') in 0.4926712 seconds
+Number of updated asset objects reloaded before import = 0Number of asset objects unloaded after import = 0
+
+========================================================================
+Received Prepare
+Refreshing native plugins compatible for Editor in 6.60 ms, found 4 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Unloading 40 Unused Serialized files (Serialized files now loaded: 0)
+Unloading 6616 unused Assets / (6.9 MB). Loaded Objects now: 7290.
+Memory consumption went from 151.6 MB to 144.7 MB.
+Total: 17.213000 ms (FindLiveObjects: 0.921300 ms CreateObjectMapping: 0.578500 ms MarkObjects: 9.017300 ms  DeleteObjects: 6.694300 ms)
+
+Prepare: number of updated asset objects reloaded= 0
+========================================================================
+Received Import Request.
+  Time since last request: 233.782367 seconds.
+  path: Assets/scripts/AnswerScript.cs
+  artifactKey: Guid(9d67d5c012825b24d8a33ae7add06859) Importer(815301076,1909f56bfc062723c751e8b465ee728b)
+Start importing Assets/scripts/AnswerScript.cs using Guid(9d67d5c012825b24d8a33ae7add06859) Importer(815301076,1909f56bfc062723c751e8b465ee728b) (PreviewImporter) -> (artifact id: 'ff070b67bc1bc2543258d3038f3570a3') in 0.0047137 seconds
+Number of updated asset objects reloaded before import = 0Number of asset objects unloaded after import = 0
+
+========================================================================
+Received Prepare
+Refreshing native plugins compatible for Editor in 6.73 ms, found 4 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Unloading 40 Unused Serialized files (Serialized files now loaded: 0)
+Unloading 6616 unused Assets / (7.3 MB). Loaded Objects now: 7290.
+Memory consumption went from 151.6 MB to 144.3 MB.
+Total: 19.640300 ms (FindLiveObjects: 1.217700 ms CreateObjectMapping: 0.789700 ms MarkObjects: 10.813500 ms  DeleteObjects: 6.816600 ms)
+
+Prepare: number of updated asset objects reloaded= 0
+========================================================================
+Received Prepare
+Refreshing native plugins compatible for Editor in 3.04 ms, found 4 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Unloading 40 Unused Serialized files (Serialized files now loaded: 0)
+Unloading 6616 unused Assets / (8.7 MB). Loaded Objects now: 7290.
+Memory consumption went from 151.6 MB to 142.9 MB.
+Total: 20.103300 ms (FindLiveObjects: 0.661400 ms CreateObjectMapping: 0.552800 ms MarkObjects: 12.549000 ms  DeleteObjects: 6.338200 ms)
+
+Prepare: number of updated asset objects reloaded= 0

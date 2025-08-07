@@ -2,6 +2,13 @@ using UnityEngine;
 using System.Collections.Generic;    // for List<T>
 using UnityEngine.UI;   //for text
 using TMPro;
+using TMPro;              // ← for TextMeshProUGUI
+using UnityEngine.UI; 
+
+
+// replace the old Text field:
+public TextMeshProUGUI questionText;
+
 
 public class QuizManager : MonoBehaviour
 {
