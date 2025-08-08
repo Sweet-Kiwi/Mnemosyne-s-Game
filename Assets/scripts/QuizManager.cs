@@ -3,30 +3,38 @@ using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 using UnityEngine.UI;
+using System;
 
 public class QuizManager : MonoBehaviour
 {
     [Header("Data & UI")]
-    public List<QuestionAndAnswer> QnA = new List<QuestionAndAnswer>();   // Question, Answers[4], CorrectAnswer=1..4
+    public List<QuestionAndAnswer> QnA = new List<QuestionAndAnswer>();   // data
     public GameObject[] options;                                           // 4 Button GameObjects
-    public TextMeshProUGUI questionText;                                   // Big question label
+    public TextMeshProUGUI questionText;                                   // big question label
 
     [Header("HUD")]
     public TextMeshProUGUI scoreText;     // e.g. "Score: 30"
     public TextMeshProUGUI progressText;  // e.g. "3 / 10"
 
+    [Header("Player")]
+    public string playerName = "Player";  // set this from your name input screen
+
     [Header("Points")]
     public int pointsCorrect = 10;
-    public int pointsWrong   = 0;         // set negative for penalties
+
+    [Header("Streak Bonus")]
+    public bool enableStreakBonus = true;
+    public int streakThreshold = 3;       // every 3 in a row…
+    public int streakBonusPoints = 5;     // …add +5 points
+    public TextMeshProUGUI streakToast;   // optional tiny "Streak +5!" label (can be null)
 
     [Header("SFX")]
-    public AudioSource sfxSource;         // add AudioSource to QuizManager object and drag here
-    public AudioClip sfxCorrect;          // drop correct sound
-    public AudioClip sfxWrong;            // drop wrong sound
+    public AudioSource sfxSource;         // add AudioSource to this object and drag here
+    public AudioClip sfxCorrect;
+    public AudioClip sfxWrong;
 
     [Header("Timing")]
-    [SerializeField] float nextQuestionDelay = 0.30f;  // delay before moving on
-    [SerializeField] float wrongLockDelay    = 0.25f;  // if not advancing on wrong
+    [SerializeField] float nextQuestionDelay = 0.30f;  // delay before moving on (both right & wrong)
 
     [Header("Flow")]
     public bool advanceOnWrong       = true;           // move to next even if wrong
@@ -37,23 +45,49 @@ public class QuizManager : MonoBehaviour
     public Color correctColor = new Color(0.6f, 1f, 0.6f, 1f);
     public Color wrongColor   = new Color(1f, 0.6f, 0.6f, 1f);
 
-    // runtime
-    private List<QuestionAndAnswer> pool;  // shuffled working copy
-    private int   index = 0;               // current question idx
-    private bool  acceptingInput = false;  // click guard
-    private int   score = 0;
+    [Header("Results & Leaderboard Panels")]
+    public GameObject resultsPanel;             // panel to show at the end
+    public TextMeshProUGUI resultsScoreText;    // "Score: 80"
+    public TextMeshProUGUI resultsPercentText;  // "80%"
+    public TextMeshProUGUI resultsStreakText;   // "Best Streak: 5"
+    public TextMeshProUGUI resultsHeaderText;   // e.g., "Nice run, Alex!"
+
+    public GameObject leaderboardPanel;         // optional: a simple panel to list results
+    public TextMeshProUGUI leaderboardText;     // multi-line text to show top 10
+
+    // runtime state
+    private List<QuestionAndAnswer> pool;       // shuffled working copy
+    private int index = 0;                      // current question idx
+    private bool acceptingInput = false;        // click guard
+    private int score = 0;
+    private int totalQuestions = 0;
+    private int correctCount = 0;
+    private int currentStreak = 0;
+    private int bestStreak = 0;
 
     void Awake()
     {
         if (!sfxSource) sfxSource = GetComponent<AudioSource>();
+        // Load saved settings (volume/toggles)
+        SettingsService.ApplyToQuizManager(this);
     }
 
     void Start()
     {
+        resultsPanel?.SetActive(false);
+        leaderboardPanel?.SetActive(false);
+
         pool = new List<QuestionAndAnswer>(QnA);
         Shuffle(pool);
+
         index = 0;
         score = 0;
+        correctCount = 0;
+        currentStreak = 0;
+        bestStreak = 0;
+
+        totalQuestions = pool.Count;
+
         UpdateHUD();
         ShowCurrent();
     }
@@ -63,7 +97,7 @@ public class QuizManager : MonoBehaviour
     {
         for (int i = 0; i < list.Count; i++)
         {
-            int j = Random.Range(i, list.Count);
+            int j = UnityEngine.Random.Range(i, list.Count);
             (list[i], list[j]) = (list[j], list[i]);
         }
     }
@@ -72,16 +106,12 @@ public class QuizManager : MonoBehaviour
     {
         if (pool == null || pool.Count == 0)
         {
-            if (questionText) questionText.text = "No questions!";
-            SetButtons(false);
-            UpdateProgress();
+            EndQuiz();
             return;
         }
         if (index >= pool.Count)
         {
-            if (questionText) questionText.text = "Quiz complete!";
-            SetButtons(false);
-            UpdateProgress();
+            EndQuiz();
             return;
         }
 
@@ -115,7 +145,7 @@ public class QuizManager : MonoBehaviour
             var a = go.GetComponent<AnswerScript>();
             if (a)
             {
-                a.ResetState();                          // safe if it just resets visuals
+                a.ResetState();
                 a.isCorrect   = (qa.CorrectAnswer == i + 1);
                 a.quizManager = this;
             }
@@ -132,6 +162,7 @@ public class QuizManager : MonoBehaviour
         UpdateProgress();
         SetButtons(true);
         acceptingInput = true;
+        if (streakToast) streakToast.gameObject.SetActive(false);
     }
 
     void SetButtons(bool on)
@@ -151,9 +182,8 @@ public class QuizManager : MonoBehaviour
     void UpdateProgress()
     {
         if (!progressText) return;
-        int total   = pool != null ? pool.Count : 0;
-        int current = Mathf.Clamp(index + 1, 0, Mathf.Max(total, 1));
-        progressText.text = $"{current} / {total}";
+        int current = Mathf.Clamp(index + 1, 0, Mathf.Max(totalQuestions, 1));
+        progressText.text = $"{current} / {totalQuestions}";
     }
 
     public void Correct()
@@ -162,19 +192,29 @@ public class QuizManager : MonoBehaviour
         acceptingInput = false;
 
         SetButtons(false);
-        score += pointsCorrect;
-        UpdateHUD();
 
+        // scoring
+        score += pointsCorrect;
+        correctCount += 1;
+
+        // streak bonus
+        currentStreak += 1;
+        if (currentStreak > bestStreak) bestStreak = currentStreak;
+
+        if (enableStreakBonus && streakThreshold > 0 && (currentStreak % streakThreshold == 0))
+        {
+            score += streakBonusPoints;
+            if (streakToast)
+            {
+                streakToast.text = $"+{streakBonusPoints} Streak!";
+                streakToast.gameObject.SetActive(true);
+            }
+        }
+
+        UpdateHUD();
         if (sfxSource && sfxCorrect) sfxSource.PlayOneShot(sfxCorrect);
 
         StartCoroutine(NextQuestionAfterDelay());
-    }
-
-    IEnumerator NextQuestionAfterDelay()
-    {
-        yield return new WaitForSeconds(nextQuestionDelay);
-        index++;            // advance by exactly one
-        ShowCurrent();
     }
 
     public void Wrong()
@@ -182,12 +222,13 @@ public class QuizManager : MonoBehaviour
         if (!acceptingInput) return;
         acceptingInput = false;
 
-        score += pointsWrong;   // usually 0, or negative if you want penalties
-        UpdateHUD();
+        // reset streak
+        currentStreak = 0;
+
+        // reveal the correct button (optional)
+        if (revealCorrectOnWrong) RevealCorrect();
 
         if (sfxSource && sfxWrong) sfxSource.PlayOneShot(sfxWrong);
-
-        if (revealCorrectOnWrong) RevealCorrect();
 
         SetButtons(false);
 
@@ -197,8 +238,23 @@ public class QuizManager : MonoBehaviour
         }
         else
         {
-            StartCoroutine(UnlockAfterDelay(wrongLockDelay));
+            // If you decide to stay on the question, add a brief unlock if needed
+            StartCoroutine(UnlockAfterDelay(0.25f));
         }
+    }
+
+    IEnumerator NextQuestionAfterDelay()
+    {
+        yield return new WaitForSeconds(nextQuestionDelay);
+        index++;            // advance by exactly one
+        ShowCurrent();
+    }
+
+    IEnumerator UnlockAfterDelay(float t)
+    {
+        yield return new WaitForSeconds(t);
+        acceptingInput = true;
+        SetButtons(true);
     }
 
     void RevealCorrect()
@@ -215,10 +271,82 @@ public class QuizManager : MonoBehaviour
         }
     }
 
-    IEnumerator UnlockAfterDelay(float t)
+    void EndQuiz()
     {
-        yield return new WaitForSeconds(t);
-        acceptingInput = true;
-        SetButtons(true);
+        SetButtons(false);
+
+        // Results UI
+        if (resultsPanel) resultsPanel.SetActive(true);
+
+        float percent = (totalQuestions > 0) ? (100f * correctCount / totalQuestions) : 0f;
+
+        if (resultsHeaderText) resultsHeaderText.text = $"Nice run, {playerName}!";
+        if (resultsScoreText)  resultsScoreText.text  = $"Score: {score}";
+        if (resultsPercentText) resultsPercentText.text = $"{percent:0}%";
+        if (resultsStreakText) resultsStreakText.text = $"Best Streak: {bestStreak}";
+
+        // Save to leaderboard
+        var entry = new LeaderboardEntry
+        {
+            name = string.IsNullOrWhiteSpace(playerName) ? "Player" : playerName,
+            score = score,
+            bestStreak = bestStreak,
+            dateISO = DateTime.Now.ToString("yyyy-MM-dd")
+        };
+        LeaderboardService.AddEntry(entry);
+
+        // Show top 10 (optional simple text list)
+        if (leaderboardPanel) leaderboardPanel.SetActive(true);
+        if (leaderboardText)
+        {
+            var top = LeaderboardService.GetTop(10);
+            System.Text.StringBuilder sb = new System.Text.StringBuilder();
+            int rank = 1;
+            foreach (var e in top)
+            {
+                sb.AppendLine($"{rank,2}. {e.name,-12}  {e.score,4}  (Streak {e.bestStreak})  {e.dateISO}");
+                rank++;
+            }
+            leaderboardText.text = sb.ToString();
+        }
+    }
+
+    // Called by a "Play Again" button on the Results panel
+    public void RestartQuiz()
+    {
+        resultsPanel?.SetActive(false);
+        leaderboardPanel?.SetActive(false);
+
+        pool = new List<QuestionAndAnswer>(QnA);
+        Shuffle(pool);
+
+        index = 0;
+        score = 0;
+        correctCount = 0;
+        currentStreak = 0;
+        bestStreak = 0;
+        totalQuestions = pool.Count;
+
+        UpdateHUD();
+        ShowCurrent();
+    }
+
+    // Settings panel hooks (optional)
+    public void OnToggleAdvanceOnWrong(bool value)
+    {
+        advanceOnWrong = value;
+        SettingsService.SaveAdvanceOnWrong(value);
+    }
+
+    public void OnToggleRevealCorrect(bool value)
+    {
+        revealCorrectOnWrong = value;
+        SettingsService.SaveRevealCorrect(value);
+    }
+
+    public void OnVolumeChanged(float vol01)
+    {
+        if (sfxSource) sfxSource.volume = Mathf.Clamp01(vol01);
+        SettingsService.SaveVolume(vol01);
     }
 }
