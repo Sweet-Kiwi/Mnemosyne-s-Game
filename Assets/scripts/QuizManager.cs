@@ -6,25 +6,47 @@ using UnityEngine.UI;
 
 public class QuizManager : MonoBehaviour
 {
-    [Header("Populate in Inspector")]
-    public List<QuestionAndAnswer> QnA = new List<QuestionAndAnswer>();  // your data (Question, Answers[4], CorrectAnswer=1..4)
+    [Header("Data & UI")]
+    public List<QuestionAndAnswer> QnA = new List<QuestionAndAnswer>();  // Question, Answers[4], CorrectAnswer=1..4
     public GameObject[] options;                                          // 4 Button GameObjects
-    public TextMeshProUGUI questionText;                                  // big question label
+    public TextMeshProUGUI questionText;                                  // Big question label
+
+    [Header("HUD")]
+    public TextMeshProUGUI scoreText;     // <-- assign in Inspector
+    public TextMeshProUGUI progressText;  // <-- assign in Inspector: "3 / 10"
+
+    [Header("Points")]
+    public int pointsCorrect = 10;
+    public int pointsWrong = 0;           // set to -5 if you want penalties
+
+    [Header("SFX")]
+    public AudioSource sfxSource;         // <-- add AudioSource to QuizManager object and drag here
+    public AudioClip sfxCorrect;          // <-- drag “correct” clip here
+    public AudioClip sfxWrong;            // <-- drag “wrong” clip here
 
     [Header("Timing")]
-    [SerializeField] float nextQuestionDelay = 0.30f;  // delay after correct before showing next
-    [SerializeField] float wrongLockDelay = 0.25f;     // brief lock after wrong, so spam clicks don’t glitch
+    [SerializeField] float nextQuestionDelay = 0.30f;  // delay after correct
+    [SerializeField] float wrongLockDelay = 0.25f;     // brief lock after wrong
 
-    private List<QuestionAndAnswer> pool;   // working copy (keeps your Inspector list intact)
-    private int index = 0;                  // current question in pool
-    private bool acceptingInput = false;    // input guard
+    private List<QuestionAndAnswer> pool;   // shuffled working copy
+    private int index = 0;                  // current question
+    private bool acceptingInput = false;    // click guard
+    private int score = 0;
 
+    // Awake runs before Start
+    void Awake()
+    {
+        if (!sfxSource)
+            sfxSource = GetComponent<AudioSource>();
+    }
+    
     void Start()
     {
-        // build a shuffled working pool
         pool = new List<QuestionAndAnswer>(QnA);
         Shuffle(pool);
         index = 0;
+        score = 0;
+        UpdateHUD();
         ShowCurrent();
     }
 
@@ -39,23 +61,24 @@ public class QuizManager : MonoBehaviour
 
     void ShowCurrent()
     {
-        // end states
         if (pool == null || pool.Count == 0)
         {
             if (questionText) questionText.text = "No questions!";
             SetButtons(false);
+            UpdateProgress(); // will say 0/0
             return;
         }
         if (index >= pool.Count)
         {
             if (questionText) questionText.text = "Quiz complete!";
             SetButtons(false);
+            UpdateProgress();
             return;
         }
 
         var qa = pool[index];
 
-        // validate data so we never “silently skip”
+        // validate entry so we never silently freeze
         if (qa == null ||
             qa.Answers == null ||
             qa.Answers.Length < options.Length ||
@@ -68,34 +91,34 @@ public class QuizManager : MonoBehaviour
             return;
         }
 
-        // set question text
         if (questionText) questionText.text = qa.Question;
 
-        // fill/reset buttons
         for (int i = 0; i < options.Length; i++)
         {
             var go = options[i];
             if (!go) continue;
 
+            // reset state + assign correctness
             var a = go.GetComponent<AnswerScript>();
             if (a)
             {
+                a.ResetState();
+                a.isCorrect = (qa.CorrectAnswer == i + 1); // data is 1-based
                 a.quizManager = this;
-                a.ResetState();                              // normal color, interactable = true
-                a.isCorrect = (qa.CorrectAnswer == i + 1);   // data is 1-based
             }
 
+            // set label
             var label = go.GetComponentInChildren<TextMeshProUGUI>(true);
-            if (label)
-            {
-                // safe: Answers.Length has been checked above
-                label.text = qa.Answers[i];
-            }
+            if (label) label.text = qa.Answers[i];
+
+            // ensure clickable
+            var b = go.GetComponent<Button>();
+            if (b) b.interactable = true;
         }
 
+        UpdateProgress();
         SetButtons(true);
         acceptingInput = true;
-        // Debug.Log($"Showing {index+1}/{pool.Count}: {qa.Question}");
     }
 
     void SetButtons(bool on)
@@ -107,12 +130,29 @@ public class QuizManager : MonoBehaviour
         }
     }
 
-    // called by AnswerScript if the clicked option was correct
+    void UpdateHUD()
+    {
+        if (scoreText) scoreText.text = $"Score: {score}";
+    }
+
+    void UpdateProgress()
+    {
+        if (!progressText) return;
+        int total = pool != null ? pool.Count : 0;
+        int current = Mathf.Clamp(index + 1, 0, Mathf.Max(total, 1));
+        progressText.text = $"{current} / {total}";
+    }
+
+    // called by AnswerScript when the right button is clicked
     public void Correct()
     {
         if (!acceptingInput) return;
         acceptingInput = false;
         SetButtons(false);
+
+        score += pointsCorrect;
+        UpdateHUD();
+        if (sfxSource && sfxCorrect) sfxSource.PlayOneShot(sfxCorrect);
 
         StartCoroutine(NextQuestionAfterDelay());
     }
@@ -120,17 +160,21 @@ public class QuizManager : MonoBehaviour
     IEnumerator NextQuestionAfterDelay()
     {
         yield return new WaitForSeconds(nextQuestionDelay);
-        index++;                // advance EXACTLY one
+        index++;            // move forward by exactly 1
         ShowCurrent();
     }
 
-    // called by AnswerScript if the clicked option was wrong
+    // called by AnswerScript when a wrong button is clicked
     public void Wrong()
     {
         if (!acceptingInput) return;
-        acceptingInput = false;                       // brief lock so spam clicks don’t double-trigger
+        acceptingInput = false;   // small lock so spam doesn’t double-trigger
+        score += pointsWrong;
+        UpdateHUD();
+        if (sfxSource && sfxWrong) sfxSource.PlayOneShot(sfxWrong);
+
+        // stay on the same question, unlock shortly
         StartCoroutine(UnlockAfterDelay(wrongLockDelay));
-        // stays on the same question; you can add SFX or shake here if you want
     }
 
     IEnumerator UnlockAfterDelay(float t)
