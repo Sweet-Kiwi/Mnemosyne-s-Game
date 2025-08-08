@@ -1,97 +1,142 @@
-using UnityEngine;
+using System.Collections;
 using System.Collections.Generic;
+using UnityEngine;
 using TMPro;
+using UnityEngine.UI;
 
 public class QuizManager : MonoBehaviour
 {
     [Header("Populate in Inspector")]
-    public List<QuestionAndAnswer> QnA = new List<QuestionAndAnswer>();   // your questions
-    public GameObject[] options;                                           // 4 button GameObjects
-    public TextMeshProUGUI questionText;                                   // the big question label
+    public List<QuestionAndAnswer> QnA = new List<QuestionAndAnswer>();  // your data (Question, Answers[4], CorrectAnswer=1..4)
+    public GameObject[] options;                                          // 4 Button GameObjects
+    public TextMeshProUGUI questionText;                                  // big question label
 
-    // which question we’re on (index in QnA)
-    private int currentQuestion = -1;
+    [Header("Timing")]
+    [SerializeField] float nextQuestionDelay = 0.30f;  // delay after correct before showing next
+    [SerializeField] float wrongLockDelay = 0.25f;     // brief lock after wrong, so spam clicks don’t glitch
 
-    private void Start()
+    private List<QuestionAndAnswer> pool;   // working copy (keeps your Inspector list intact)
+    private int index = 0;                  // current question in pool
+    private bool acceptingInput = false;    // input guard
+
+    void Start()
     {
-        GenerateQuestion();
+        // build a shuffled working pool
+        pool = new List<QuestionAndAnswer>(QnA);
+        Shuffle(pool);
+        index = 0;
+        ShowCurrent();
     }
 
-    public void GenerateQuestion()
+    void Shuffle<T>(List<T> list)
     {
-        if (QnA == null || QnA.Count == 0)
+        for (int i = 0; i < list.Count; i++)
         {
-            Debug.LogWarning("No questions available in QnA!", this);
-            ClearUI();
+            int j = Random.Range(i, list.Count);
+            (list[i], list[j]) = (list[j], list[i]);
+        }
+    }
+
+    void ShowCurrent()
+    {
+        // end states
+        if (pool == null || pool.Count == 0)
+        {
+            if (questionText) questionText.text = "No questions!";
+            SetButtons(false);
+            return;
+        }
+        if (index >= pool.Count)
+        {
+            if (questionText) questionText.text = "Quiz complete!";
+            SetButtons(false);
             return;
         }
 
-        currentQuestion = Random.Range(0, QnA.Count);
+        var qa = pool[index];
 
-        // set the question
-        if (questionText != null)
-            questionText.text = QnA[currentQuestion].Question;
+        // validate data so we never “silently skip”
+        if (qa == null ||
+            qa.Answers == null ||
+            qa.Answers.Length < options.Length ||
+            qa.CorrectAnswer < 1 || qa.CorrectAnswer > options.Length ||
+            string.IsNullOrWhiteSpace(qa.Question))
+        {
+            Debug.LogWarning($"Bad QnA at index {index}. Skipping this entry.");
+            index++;
+            ShowCurrent();
+            return;
+        }
 
-        SetAnswers();
-    }
+        // set question text
+        if (questionText) questionText.text = qa.Question;
 
-    private void SetAnswers()
-    {
-        if (currentQuestion < 0 || currentQuestion >= QnA.Count) return;
-
-        // reset and fill all buttons
+        // fill/reset buttons
         for (int i = 0; i < options.Length; i++)
         {
-            var btn = options[i];
-            if (!btn) continue;
+            var go = options[i];
+            if (!go) continue;
 
-            // reset correctness
-            var a = btn.GetComponent<AnswerScript>();
-            if (a) a.isCorrect = false;
+            var a = go.GetComponent<AnswerScript>();
+            if (a)
+            {
+                a.quizManager = this;
+                a.ResetState();                              // normal color, interactable = true
+                a.isCorrect = (qa.CorrectAnswer == i + 1);   // data is 1-based
+            }
 
-            // set label
-            var label = btn.GetComponentInChildren<TextMeshProUGUI>();
+            var label = go.GetComponentInChildren<TextMeshProUGUI>(true);
             if (label)
             {
-                if (i < QnA[currentQuestion].Answers.Length)
-                    label.text = QnA[currentQuestion].Answers[i];
-                else
-                    label.text = "";
+                // safe: Answers.Length has been checked above
+                label.text = qa.Answers[i];
             }
         }
 
-        // mark the correct option (CorrectAnswer is 1-based)
-        int correctIndex = Mathf.Clamp(QnA[currentQuestion].CorrectAnswer - 1, 0, options.Length - 1);
-        var correct = options[correctIndex] ? options[correctIndex].GetComponent<AnswerScript>() : null;
-        if (correct) correct.isCorrect = true;
+        SetButtons(true);
+        acceptingInput = true;
+        // Debug.Log($"Showing {index+1}/{pool.Count}: {qa.Question}");
     }
 
+    void SetButtons(bool on)
+    {
+        foreach (var go in options)
+        {
+            var b = go ? go.GetComponent<Button>() : null;
+            if (b) b.interactable = on;
+        }
+    }
+
+    // called by AnswerScript if the clicked option was correct
     public void Correct()
     {
-        Debug.Log("Correct!", this);
-        // remove the used question so it doesn’t repeat
-        if (currentQuestion >= 0 && currentQuestion < QnA.Count)
-            QnA.RemoveAt(currentQuestion);
+        if (!acceptingInput) return;
+        acceptingInput = false;
+        SetButtons(false);
 
-        GenerateQuestion();
+        StartCoroutine(NextQuestionAfterDelay());
     }
 
+    IEnumerator NextQuestionAfterDelay()
+    {
+        yield return new WaitForSeconds(nextQuestionDelay);
+        index++;                // advance EXACTLY one
+        ShowCurrent();
+    }
+
+    // called by AnswerScript if the clicked option was wrong
     public void Wrong()
     {
-        Debug.Log("Wrong Answer", this);
-        // try another question (or keep the same if you want)
-        GenerateQuestion();
+        if (!acceptingInput) return;
+        acceptingInput = false;                       // brief lock so spam clicks don’t double-trigger
+        StartCoroutine(UnlockAfterDelay(wrongLockDelay));
+        // stays on the same question; you can add SFX or shake here if you want
     }
 
-    private void ClearUI()
+    IEnumerator UnlockAfterDelay(float t)
     {
-        if (questionText) questionText.text = "";
-        foreach (var o in options)
-        {
-            var t = o ? o.GetComponentInChildren<TextMeshProUGUI>() : null;
-            if (t) t.text = "";
-            var a = o ? o.GetComponent<AnswerScript>() : null;
-            if (a) a.isCorrect = false;
-        }
+        yield return new WaitForSeconds(t);
+        acceptingInput = true;
+        SetButtons(true);
     }
 }

@@ -4,53 +4,42 @@ using UnityEngine.UI;
 [RequireComponent(typeof(Button))]
 public class AnswerScript : MonoBehaviour
 {
-    [Header("Set by QuizManager")]
-    public bool isCorrect = false;        // QuizManager flips this on the right button
-    public QuizManager quizManager;       // drag your QuizManager here
+    [Header("Set by QuizManager each question")]
+    public bool isCorrect = false;
+    public QuizManager quizManager;
 
-    [Header("Optional feedback (assign the Button's Image)")]
-    public Image background;              // usually the same Image that the Button uses
-    public Color normalColor  = Color.white;
-    public Color correctColor = new Color(0.65f, 1f, 0.65f);
-    public Color wrongColor   = new Color(1f, 0.65f, 0.65f);
+    [Header("Colors (assign or keep defaults)")]
+    public Image background;                    // usually the Button's Image; if left empty we'll try to get it
+    public Color normalColor  = Color.white;    // default button color
+    public Color correctColor = new Color(0.60f, 0.95f, 0.60f); // pale green
+    public Color wrongColor   = new Color(1.00f, 0.70f, 0.70f); // pale red
 
-    private Button _btn;
+    Button btn;
 
-    private void Awake()
+    void Awake()
     {
-        _btn = GetComponent<Button>();
+        btn = GetComponent<Button>();
         if (!background) background = GetComponent<Image>();
+        // IMPORTANT: We’re using the Inspector’s OnClick() to call Answer() once.
+        // Make sure the Button’s OnClick list has EXACTLY one entry: this.Answer().
     }
 
-    private void OnEnable()
-    {
-        // If this object is disabled/enabled between questions,
-        // reset visuals automatically.
-        ResetState();
-    }
-
-    /// <summary>Called by the Button's OnClick.</summary>
     public void Answer()
     {
-        if (_btn) _btn.interactable = false;
+        // color feedback on the clicked button
+        if (background) background.color = isCorrect ? correctColor : wrongColor;
 
-        if (isCorrect)
-        {
-            if (background) background.color = correctColor;
-            quizManager.Correct();
-        }
-        else
-        {
-            if (background) background.color = wrongColor;
-            quizManager.Wrong();
-        }
+        // notify manager
+        if (isCorrect) quizManager.Correct();
+        else           quizManager.Wrong();
     }
 
-    /// <summary>Use this to reset visuals before showing a new question.</summary>
     public void ResetState()
     {
+        if (!background) background = GetComponent<Image>();
         if (background) background.color = normalColor;
-        if (_btn) _btn.interactable = true;
-        // isCorrect will be set by QuizManager when it assigns answers
+
+        if (!btn) btn = GetComponent<Button>();
+        if (btn) btn.interactable = true;
     }
 }
