@@ -12,21 +12,26 @@ public class QuizManager : MonoBehaviour
     public GameObject[] options;                                           // 4 Button GameObjects
     public TextMeshProUGUI questionText;                                   // big question label
 
+    [Header("Panels (NEW)")]
+    public GameObject startPanel;      // start screen (active at launch)
+    public GameObject quizPanel;       // parent of quiz UI (question + options)
+
+    [Header("Name Input (NEW)")]
+    public TMP_InputField nameInput;   // TMP input on the start screen
+    public string playerName = "Player";
+
     [Header("HUD")]
     public TextMeshProUGUI scoreText;     // e.g. "Score: 30"
     public TextMeshProUGUI progressText;  // e.g. "3 / 10"
-
-    [Header("Player")]
-    public string playerName = "Player";  // set this from your name input screen
-
-    [Header("Points")]
-    public int pointsCorrect = 10;
 
     [Header("Streak Bonus")]
     public bool enableStreakBonus = true;
     public int streakThreshold = 3;       // every 3 in a row…
     public int streakBonusPoints = 5;     // …add +5 points
     public TextMeshProUGUI streakToast;   // optional tiny "Streak +5!" label (can be null)
+
+    [Header("Points")]
+    public int pointsCorrect = 10;
 
     [Header("SFX")]
     public AudioSource sfxSource;         // add AudioSource to this object and drag here
@@ -42,8 +47,8 @@ public class QuizManager : MonoBehaviour
 
     [Header("Colours")]
     public Color normalColor  = Color.white;
-    public Color correctColor = new Color(0.6f, 1f, 0.6f, 1f);
-    public Color wrongColor   = new Color(1f, 0.6f, 0.6f, 1f);
+    public Color correctColor = new Color(0.6f, 1f, 0.6f);
+    public Color wrongColor   = new Color(1f, 0.6f, 0.6f);
 
     [Header("Results & Leaderboard Panels")]
     public GameObject resultsPanel;             // panel to show at the end
@@ -65,6 +70,8 @@ public class QuizManager : MonoBehaviour
     private int currentStreak = 0;
     private int bestStreak = 0;
 
+    const string KeyPlayerName = "PLAYER_NAME";
+
     void Awake()
     {
         if (!sfxSource) sfxSource = GetComponent<AudioSource>();
@@ -74,8 +81,44 @@ public class QuizManager : MonoBehaviour
 
     void Start()
     {
-        resultsPanel?.SetActive(false);
-        leaderboardPanel?.SetActive(false);
+        // Panels at launch (show start, hide quiz/results/leaderboard)
+        if (resultsPanel) resultsPanel.SetActive(false);
+        if (leaderboardPanel) leaderboardPanel.SetActive(false);
+        if (quizPanel) quizPanel.SetActive(false);
+        if (startPanel) startPanel.SetActive(true);
+
+        // Pre-fill last used name
+        if (nameInput)
+            nameInput.text = PlayerPrefs.GetString(KeyPlayerName, "");
+    }
+
+    // === NEW ===
+    // Called by Start button on the startPanel
+    public void OnStartPressed()
+    {
+        // grab and normalize name
+        var entered = nameInput ? nameInput.text.Trim() : "";
+        playerName = string.IsNullOrEmpty(entered) ? "Player" : entered;
+
+        PlayerPrefs.SetString(KeyPlayerName, playerName);
+        PlayerPrefs.Save();
+
+        PrepareAndStartQuiz();
+    }
+
+    // You can still restart from the results screen without going back to the start panel
+    public void RestartQuiz()
+    {
+        PrepareAndStartQuiz();
+    }
+
+    // === NEW === central start/reset
+    void PrepareAndStartQuiz()
+    {
+        if (startPanel) startPanel.SetActive(false);
+        if (resultsPanel) resultsPanel.SetActive(false);
+        if (leaderboardPanel) leaderboardPanel.SetActive(false);
+        if (quizPanel) quizPanel.SetActive(true);
 
         pool = new List<QuestionAndAnswer>(QnA);
         Shuffle(pool);
@@ -276,6 +319,7 @@ public class QuizManager : MonoBehaviour
         SetButtons(false);
 
         // Results UI
+        if (quizPanel) quizPanel.SetActive(false);  // hide quiz while showing results
         if (resultsPanel) resultsPanel.SetActive(true);
 
         float percent = (totalQuestions > 0) ? (100f * correctCount / totalQuestions) : 0f;
@@ -309,44 +353,5 @@ public class QuizManager : MonoBehaviour
             }
             leaderboardText.text = sb.ToString();
         }
-    }
-
-    // Called by a "Play Again" button on the Results panel
-    public void RestartQuiz()
-    {
-        resultsPanel?.SetActive(false);
-        leaderboardPanel?.SetActive(false);
-
-        pool = new List<QuestionAndAnswer>(QnA);
-        Shuffle(pool);
-
-        index = 0;
-        score = 0;
-        correctCount = 0;
-        currentStreak = 0;
-        bestStreak = 0;
-        totalQuestions = pool.Count;
-
-        UpdateHUD();
-        ShowCurrent();
-    }
-
-    // Settings panel hooks (optional)
-    public void OnToggleAdvanceOnWrong(bool value)
-    {
-        advanceOnWrong = value;
-        SettingsService.SaveAdvanceOnWrong(value);
-    }
-
-    public void OnToggleRevealCorrect(bool value)
-    {
-        revealCorrectOnWrong = value;
-        SettingsService.SaveRevealCorrect(value);
-    }
-
-    public void OnVolumeChanged(float vol01)
-    {
-        if (sfxSource) sfxSource.volume = Mathf.Clamp01(vol01);
-        SettingsService.SaveVolume(vol01);
     }
 }
