@@ -9,43 +9,43 @@ using TMPro;
 public class QuizManager : MonoBehaviour
 {
     [Header("Data & UI")]
-    public List<QuestionAndAnswer> QnA = new List<QuestionAndAnswer>();
-    public GameObject[] options;
-    public TextMeshProUGUI questionText;
+    public List<QuestionAndAnswer> QnA = new List<QuestionAndAnswer>();   // question bank
+    public GameObject[] options;                                           // 4 Button GameObjects
+    public TextMeshProUGUI questionText;                                   // big question label
 
     [Header("Panels")]
-    public GameObject startPanel;
-    public GameObject quizPanel;
+    public GameObject startPanel;      // shown at launch
+    public GameObject quizPanel;       // main quiz UI (question + options)
 
     [Header("Name Input")]
-    public TMP_InputField nameInput;
+    public TMP_InputField nameInput;   // on the start screen
     public string playerName = "Player";
     const string KeyPlayerName = "PLAYER_NAME";
 
     [Header("HUD")]
-    public TextMeshProUGUI scoreText;
-    public TextMeshProUGUI progressText;
+    public TextMeshProUGUI scoreText;     // e.g. "Score: 30"
+    public TextMeshProUGUI progressText;  // e.g. "3 / 10"
 
     [Header("Streak Bonus")]
     public bool enableStreakBonus = true;
-    public int streakThreshold = 3;
-    public int streakBonusPoints = 5;
-    public TextMeshProUGUI streakToast;
+    public int streakThreshold = 3;       // every 3 in a row…
+    public int streakBonusPoints = 5;     // …add +5 points
+    public TextMeshProUGUI streakToast;   // small “+5 Streak!” label (optional)
 
     [Header("Points")]
     public int pointsCorrect = 10;
 
     [Header("SFX")]
-    public AudioSource sfxSource;
+    public AudioSource sfxSource;         // add AudioSource to this object and drag here
     public AudioClip sfxCorrect;
     public AudioClip sfxWrong;
 
     [Header("Timing")]
-    [SerializeField] float nextQuestionDelay = 0.30f;
+    [SerializeField] float nextQuestionDelay = 0.30f;  // delay before moving on (both right & wrong)
 
     [Header("Flow")]
-    public bool advanceOnWrong       = true;
-    public bool revealCorrectOnWrong = true;
+    public bool advanceOnWrong       = true;           // move to next even if wrong
+    public bool revealCorrectOnWrong = true;           // flash the correct answer when wrong
 
     [Header("Colours")]
     public Color normalColor  = Color.white;
@@ -53,21 +53,19 @@ public class QuizManager : MonoBehaviour
     public Color wrongColor   = new Color(1f, 0.6f, 0.6f, 1f);
 
     [Header("Results & Leaderboard Panels")]
-    public GameObject resultsPanel;
-    public TextMeshProUGUI resultsScoreText;
-    public TextMeshProUGUI resultsPercentText;
-    public TextMeshProUGUI resultsStreakText;
-    public TextMeshProUGUI resultsHeaderText;
-    public GameObject leaderboardPanel;
-    public TextMeshProUGUI leaderboardText;
+    public GameObject resultsPanel;             // panel to show at the end
+    public TextMeshProUGUI resultsScoreText;    // "Score: 80"
+    public TextMeshProUGUI resultsPercentText;  // "80%"
+    public TextMeshProUGUI resultsStreakText;   // "Best Streak: 5"
+    public TextMeshProUGUI resultsHeaderText;   // "Nice run, Alex!"
 
-    [Header("Page Flip (optional)")]
-    public BookFlipController bookFlip; // drag your RightPage_Flip here (optional)
+    public GameObject leaderboardPanel;         // simple panel to list top results
+    public TextMeshProUGUI leaderboardText;     // multi-line top-10 display
 
-    // runtime
-    List<QuestionAndAnswer> pool;
-    int index = 0;
-    bool acceptingInput = false;
+    // runtime state
+    List<QuestionAndAnswer> pool;   // shuffled working copy
+    int index = 0;                  // current question idx
+    bool acceptingInput = false;    // click guard
     int score = 0;
     int totalQuestions = 0;
     int correctCount = 0;
@@ -81,16 +79,18 @@ public class QuizManager : MonoBehaviour
 
     void Start()
     {
+        // Show start; hide quiz + results + leaderboard
         if (resultsPanel) resultsPanel.SetActive(false);
         if (leaderboardPanel) leaderboardPanel.SetActive(false);
         if (quizPanel) quizPanel.SetActive(false);
         if (startPanel) startPanel.SetActive(true);
 
+        // Pre-fill last name
         if (nameInput)
             nameInput.text = PlayerPrefs.GetString(KeyPlayerName, "");
     }
 
-    // UI: Start pressed
+    // === UI: Start pressed (direct start, without router) ===
     public void OnStartPressed()
     {
         var entered = nameInput ? nameInput.text.Trim() : "";
@@ -102,20 +102,35 @@ public class QuizManager : MonoBehaviour
         PrepareAndStartQuiz();
     }
 
-    // UI: Play Again
+    // === Called by BookPageRouter after the flip ===
+    public void BeginQuizFromRouter()
+    {
+        if (nameInput != null)
+        {
+            var entered = nameInput.text.Trim();
+            playerName = string.IsNullOrEmpty(entered) ? "Player" : entered;
+            PlayerPrefs.SetString(KeyPlayerName, playerName);
+            PlayerPrefs.Save();
+        }
+
+        PrepareAndStartQuiz();
+    }
+
+    // === UI: Play Again on results ===
     public void RestartQuiz()
     {
         PrepareAndStartQuiz();
     }
 
-    // Optional: clear leaderboard button
+    // === Dev/Settings: Clear leaderboard button (optional) ===
     public void OnClearLeaderboardClicked()
     {
         LeaderboardService.ClearAll();
-        RefreshLeaderboardUI();
+        RefreshLeaderboardUI(); // updates the on-screen list if visible
     }
 
-    void PrepareAndStartQuiz()
+    // Central reset
+    public void PrepareAndStartQuiz()
     {
         if (startPanel) startPanel.SetActive(false);
         if (resultsPanel) resultsPanel.SetActive(false);
@@ -130,6 +145,7 @@ public class QuizManager : MonoBehaviour
         correctCount = 0;
         currentStreak = 0;
         bestStreak = 0;
+
         totalQuestions = pool.Count;
 
         UpdateHUD();
@@ -156,14 +172,14 @@ public class QuizManager : MonoBehaviour
 
         var qa = pool[index];
 
-        // validate entry
+        // validate entry so we never freeze silently
         if (qa == null ||
             string.IsNullOrWhiteSpace(qa.Question) ||
             qa.Answers == null ||
             qa.Answers.Length < options.Length ||
             qa.CorrectAnswer < 1 || qa.CorrectAnswer > options.Length)
         {
-            Debug.LogWarning($"Bad QnA at index {index}. Skipping.");
+            Debug.LogWarning($"Bad QnA at index {index}. Skipping this entry.");
             index++;
             ShowCurrent();
             return;
@@ -176,24 +192,24 @@ public class QuizManager : MonoBehaviour
             var go = options[i];
             if (!go) continue;
 
+            // reset visuals
             var img = go.GetComponent<Image>();
             if (img) img.color = normalColor;
 
+            // set up answer script
             var a = go.GetComponent<AnswerScript>();
             if (a)
             {
                 a.ResetState();
                 a.isCorrect   = (qa.CorrectAnswer == i + 1);
                 a.quizManager = this;
-                // keep colors in sync with AnswerScript if it exposes them
-                a.normalColor  = normalColor;
-                a.correctColor = correctColor;
-                a.wrongColor   = wrongColor;
             }
 
+            // set label
             var label = go.GetComponentInChildren<TextMeshProUGUI>(true);
             if (label) label.text = qa.Answers[i];
 
+            // ensure clickable
             var b = go.GetComponent<Button>();
             if (b) b.interactable = true;
         }
@@ -233,9 +249,11 @@ public class QuizManager : MonoBehaviour
 
         SetButtons(false);
 
+        // scoring
         score += pointsCorrect;
         correctCount += 1;
 
+        // streak bonus
         currentStreak += 1;
         if (currentStreak > bestStreak) bestStreak = currentStreak;
 
@@ -260,36 +278,31 @@ public class QuizManager : MonoBehaviour
         if (!acceptingInput) return;
         acceptingInput = false;
 
+        // reset streak
         currentStreak = 0;
 
+        // reveal the correct button (optional)
         if (revealCorrectOnWrong) RevealCorrect();
+
         if (sfxSource && sfxWrong) sfxSource.PlayOneShot(sfxWrong);
 
         SetButtons(false);
 
         if (advanceOnWrong)
+        {
             StartCoroutine(NextQuestionAfterDelay());
+        }
         else
+        {
             StartCoroutine(UnlockAfterDelay(0.25f));
+        }
     }
 
     IEnumerator NextQuestionAfterDelay()
     {
-        if (bookFlip)
-        {
-            // Flip and advance index at mid-flip
-            yield return StartCoroutine(bookFlip.FlipToNext(() =>
-            {
-                index++;
-            }));
-            ShowCurrent();
-        }
-        else
-        {
-            yield return new WaitForSeconds(nextQuestionDelay);
-            index++;
-            ShowCurrent();
-        }
+        yield return new WaitForSeconds(nextQuestionDelay);
+        index++;            // advance by exactly one
+        ShowCurrent();
     }
 
     IEnumerator UnlockAfterDelay(float t)
@@ -317,7 +330,8 @@ public class QuizManager : MonoBehaviour
     {
         SetButtons(false);
 
-        if (quizPanel)    quizPanel.SetActive(false);
+        // Results UI
+        if (quizPanel) quizPanel.SetActive(false);
         if (resultsPanel) resultsPanel.SetActive(true);
 
         float percent = (totalQuestions > 0) ? (100f * correctCount / totalQuestions) : 0f;
@@ -327,14 +341,39 @@ public class QuizManager : MonoBehaviour
         if (resultsPercentText) resultsPercentText.text = $"{percent:0}%";
         if (resultsStreakText)  resultsStreakText.text  = $"Best Streak: {bestStreak}";
 
+        // Save to leaderboard
         var entry = new LeaderboardEntry
         {
-            name      = string.IsNullOrWhiteSpace(playerName) ? "Player" : playerName,
-            score     = score,
-            bestStreak= bestStreak,
-            dateISO   = DateTime.Now.ToString("yyyy-MM-dd")
+            name = string.IsNullOrWhiteSpace(playerName) ? "Player" : playerName,
+            score = score,
+            bestStreak = bestStreak,
+            dateISO = DateTime.Now.ToString("yyyy-MM-dd")
         };
         LeaderboardService.AddEntry(entry);
 
+        // Populate on-screen leaderboard
         RefreshLeaderboardUI();
     }
+
+    void RefreshLeaderboardUI()
+    {
+        if (leaderboardPanel) leaderboardPanel.SetActive(true);
+        if (!leaderboardText) return;
+
+        var top = LeaderboardService.GetTop(10);
+        if (top.Count == 0)
+        {
+            leaderboardText.text = "No scores yet.";
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        int rank = 1;
+        foreach (var e in top)
+        {
+            sb.AppendLine($"{rank,2}. {e.name,-12}  {e.score,4}  (Streak {e.bestStreak})  {e.dateISO}");
+            rank++;
+        }
+        leaderboardText.text = sb.ToString();
+    }
+}
